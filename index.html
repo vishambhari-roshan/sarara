@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>SARARA — GHAR Tracker (Up to 12 Players)</title>
+<meta name="theme-color" content="#0b76ff"/>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SARARA">
+<style>
+  :root{
+    --bg:#f3f6fb;--card:#fff;--accent:#0b76ff;--muted:#6b7280;--ok:#1a9a6a;--bad:#d9534f;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:14px;background:linear-gradient(180deg,var(--bg),#eef3fb);min-height:100vh;display:flex;flex-direction:column;gap:12px}
+  header.card{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:12px;background:var(--card);box-shadow:0 8px 22px rgba(11,118,255,0.06)}
+  header h1{margin:0;font-size:18px}
+  header p{margin:0;color:var(--muted);font-size:13px}
+  .card{background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(19,24,31,0.05)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  button{border:0;padding:9px 12px;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+  button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(11,118,255,0.12)}
+  button.warn{background:var(--bad)}
+  .playersList{display:flex;flex-direction:column;gap:8px;margin-top:12px;max-height:58vh;overflow:auto;padding-right:6px}
+  .playerRow{display:flex;gap:8px;align-items:center;padding:8px;border-radius:10px;background:#fbfdff;border:1px solid #eef4fb}
+  .playerRow .name{flex:1;min-width:80px}
+  input[type="text"],input[type="number"]{padding:8px;border-radius:8px;border:1px solid #e6eefb;background:#fff;font-size:14px}
+  input[type="number"]::-webkit-outer-spin-button,input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .smallInput{width:78px}
+  .center{text-align:center}
+  .result-pay{color:var(--bad);font-weight:700}
+  .result-rec{color:var(--ok);font-weight:700}
+  .muted{color:var(--muted);font-size:13px}
+  .summary{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .pill{background:#f1f7ff;padding:8px 12px;border-radius:999px;font-weight:700;color:#03396b}
+  .roundCard{background:#fff;border-radius:10px;padding:8px;margin-bottom:8px;border:1px solid #eef4fb}
+  footer{margin-top:auto;text-align:center;color:var(--muted);font-size:13px;padding:8px}
+  @media (max-width:560px){ .smallInput{width:68px} .playerRow{gap:6px} }
+</style>
+</head>
+<body>
+
+<header class="card">
+  <div>
+    <h1>SARARA — GHAR Tracker</h1>
+    <p class="muted">Up to 12 players • Auto-save players & rounds • Rename-safe on iPhone</p>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button id="addBtn">➕ Add</button>
+    <button id="delBtn" class="ghost">➖ Del</button>
+    <button id="clearAllBtn" class="warn">Clear All</button>
+  </div>
+</header>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div class="controls">
+      <button id="calcBtn">Calculate</button>
+      <button id="saveRoundBtn" class="ghost">💾 Save Round</button>
+      <button id="newRoundBtn" class="ghost">♻ New Round</button>
+      <button id="exportBtn" class="ghost">📥 Export Excel</button>
+      <button id="clearHistoryBtn" class="ghost">🗑 Clear History</button>
+    </div>
+    <div style="text-align:right">
+      <div class="muted">Players</div>
+      <div id="playerCount" style="font-weight:800;font-size:18px">0</div>
+    </div>
+  </div>
+
+  <!-- players stacked vertically; each row keeps inputs on same line -->
+  <div class="playersList" id="playersList" aria-live="polite"></div>
+
+  <div class="summary" id="liveSummary" style="display:none">
+    <div class="pill">Total GHAR: <span id="totalGhar">0</span></div>
+    <div class="pill">Total Pays: <span id="totalPays">0</span></div>
+    <div class="pill">Total Receives: <span id="totalReceives">0</span></div>
+    <div class="pill">Balanced: <span id="isBalanced">-</span></div>
+  </div>
+  <div id="adjustNote" class="muted" style="display:none;margin-top:8px">(Tiny adjustment applied for exact balance.)</div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <strong>History</strong>
+    <div class="muted" style="font-size:13px">Saved rounds (auto)</div>
+  </div>
+  <div id="roundsList" style="margin-top:10px;max-height:300px;overflow:auto;padding-right:6px">
+    <div class="muted">No rounds saved yet.</div>
+  </div>
+
+  <div style="margin-top:12px"><strong>Scoreboard</strong>
+    <div id="scoreboard" style="margin-top:8px" class="muted">No data</div>
+  </div>
+</div>
+
+<footer class="card">
+  <div class="muted">To install on iPhone: open in Safari → Share → Add to Home Screen.</div>
+</footer>
+
+<!-- SheetJS for .xlsx export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+/* SARARA — updated: MAX_PLAYERS = 12; stacked vertical rows; same-line inputs */
+(function(){
+  const DEFAULT_NAMES = ["Roshan","Jayesh","Mayank","Bhawesh","Raunak"];
+  const MIN_PLAYERS = 2, MAX_PLAYERS = 12;
+  const STORE_PLAYERS = 'sarara_players_v4', STORE_HISTORY = 'sarara_history_v4';
+
+  // DOM refs
+  const playersList = document.getElementById('playersList');
+  const addBtn = document.getElementById('addBtn'), delBtn = document.getElementById('delBtn'), clearAllBtn = document.getElementById('clearAllBtn');
+  const calcBtn = document.getElementById('calcBtn'), saveRoundBtn = document.getElementById('saveRoundBtn'), newRoundBtn = document.getElementById('newRoundBtn');
+  const exportBtn = document.getElementById('exportBtn'), clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  const playerCountEl = document.getElementById('playerCount'), totalGharEl = document.getElementById('totalGhar');
+  const totalPaysEl = document.getElementById('totalPays'), totalReceivesEl = document.getElementById('totalReceives'), isBalancedEl = document.getElementById('isBalanced');
+  const adjustNote = document.getElementById('adjustNote'), liveSummary = document.getElementById('liveSummary');
+  const roundsList = document.getElementById('roundsList'), scoreboardEl = document.getElementById('scoreboard');
+
+  // Utilities
+  const uuid = ()=> 'id-' + Math.random().toString(36).slice(2,10);
+  const toInt = v => { const n = parseInt(String(v).replace(/[^\d-]/g,''),10); return Number.isFinite(n)?n:0; };
+  const escapeHtml = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  // State
+  let players = loadPlayers() || DEFAULT_NAMES.map((n,i)=>({ id: uuid(), name: n, ghar:0, points:0, show: i===0 }));
+  while (players.length < MIN_PLAYERS) players.push({ id: uuid(), name: 'P'+(players.length+1), ghar:0, points:0, show:false });
+  if (players.length > MAX_PLAYERS) players = players.slice(0, MAX_PLAYERS);
+
+  let history = loadHistory() || [];
+
+  // Persistence
+  function savePlayers(){ try{ localStorage.setItem(STORE_PLAYERS, JSON.stringify(players)); }catch(e){} }
+  function loadPlayers(){ try{ const r=localStorage.getItem(STORE_PLAYERS); return r?JSON.parse(r):null; }catch(e){return null;} }
+  function saveHistory(){ try{ localStorage.setItem(STORE_HISTORY, JSON.stringify(history)); }catch(e){} }
+  function loadHistory(){ try{ const r=localStorage.getItem(STORE_HISTORY); return r?JSON.parse(r):[]; }catch(e){return [];} }
+
+  // Render players as vertical stacked rows (same-line inputs)
+  function renderPlayers(){
+    playersList.innerHTML = '';
+    players.forEach((p, idx) => {
+      const row = document.createElement('div'); row.className = 'playerRow';
+
+      const nameDiv = document.createElement('div'); nameDiv.className = 'name';
+      const nameInput = document.createElement('input'); nameInput.type='text'; nameInput.value = p.name; nameInput.setAttribute('data-id', p.id);
+      nameInput.addEventListener('input', e => {
+        const id = e.target.getAttribute('data-id');
+        const pl = players.find(x=>x.id===id);
+        if (pl){ pl.name = e.target.value; savePlayers(); renderHistory(); renderScoreboard(); }
+      });
+      nameDiv.appendChild(nameInput);
+      row.appendChild(nameDiv);
+
+      const gharDiv = document.createElement('div');
+      const gharInput = document.createElement('input'); gharInput.type='number'; gharInput.value = p.ghar; gharInput.className='smallInput'; gharInput.setAttribute('data-id', p.id);
+      gharInput.addEventListener('input', e => { const pl = players.find(x=>x.id===e.target.getAttribute('data-id')); if(pl){ pl.ghar = toInt(e.target.value); savePlayers(); }});
+      gharDiv.appendChild(gharInput);
+      row.appendChild(gharDiv);
+
+      const pointsDiv = document.createElement('div');
+      const pointsInput = document.createElement('input'); pointsInput.type='number'; pointsInput.value = p.points; pointsInput.className='smallInput'; pointsInput.setAttribute('data-id', p.id);
+      pointsInput.addEventListener('input', e => { const pl = players.find(x=>x.id===e.target.getAttribute('data-id')); if(pl){ pl.points = toInt(e.target.value); savePlayers(); }});
+      if (p.show){ pointsInput.disabled = true; pointsInput.style.opacity = 0.6; }
+      pointsDiv.appendChild(pointsInput);
+      row.appendChild(pointsDiv);
+
+      const showDiv = document.createElement('div');
+      const showRadio = document.createElement('input'); showRadio.type='radio'; showRadio.name='showRadio'; showRadio.checked = !!p.show;
+      showRadio.addEventListener('change', () => { players.forEach(pl=>pl.show=false); players[idx].show = true; savePlayers(); renderPlayers(); });
+      showDiv.appendChild(showRadio);
+      row.appendChild(showDiv);
+
+      const resultDiv = document.createElement('div'); resultDiv.id = 'res-'+p.id; resultDiv.className='center'; resultDiv.style.minWidth='70px'; resultDiv.textContent = '-';
+      row.appendChild(resultDiv);
+
+      playersList.appendChild(row);
+    });
+
+    document.getElementById('playerCount').textContent = players.length;
+    delBtn.disabled = players.length <= MIN_PLAYERS;
+    addBtn.disabled = players.length >= MAX_PLAYERS;
+  }
+
+  // Calculation logic (same conventions as before)
+  function compute(){
+    adjustNote.style.display = 'none';
+    liveSummary.style.display = 'none';
+    const n = players.length;
+    const gharArr = players.map(p=>toInt(p.ghar));
+    const ptsArr = players.map(p=>toInt(p.points));
+    const totalGhar = gharArr.reduce((s,v)=>s+v,0);
+    let showIndex = players.findIndex(p=>p.show); if (showIndex===-1) showIndex = 0;
+    const sumOthersPoints = ptsArr.reduce((s,v,i)=> i===showIndex ? s : s+v, 0);
+
+    const raw = new Array(n).fill(0);
+    for (let i=0;i<n;i++){
+      if (i===showIndex) continue;
+      raw[i] = ptsArr[i] + totalGhar - (gharArr[i] * n);
+    }
+    raw[showIndex] = sumOthersPoints + (gharArr[showIndex] * n) - totalGhar;
+
+    // netReceive positive => received, negative => paid
+    const netReceive = raw.map((r,i) => (i===showIndex) ? r : -r);
+
+    let totalPays=0, totalReceives=0;
+    const display = {};
+    for (let i=0;i<n;i++){
+      const id = players[i].id; const v = netReceive[i];
+      if (v>0){ display[id] = {side:'receive', amount:v}; totalReceives+=v; }
+      else if (v<0){ display[id] = {side:'pay', amount:Math.abs(v)}; totalPays+=Math.abs(v); }
+      else { display[id] = {side:'none', amount:0}; }
+    }
+
+    let noteApplied = false;
+    let diff = totalPays - totalReceives;
+    if (diff !== 0){
+      netReceive[showIndex] = netReceive[showIndex] - diff;
+      totalPays = totalReceives = 0;
+      for (let i=0;i<n;i++){
+        const id = players[i].id; const v = netReceive[i];
+        if (v>0){ display[id] = {side:'receive', amount:v}; totalReceives+=v; }
+        else if (v<0){ display[id] = {side:'pay', amount:Math.abs(v)}; totalPays+=Math.abs(v); }
+        else { display[id] = {side:'none', amount:0}; }
+      }
+      noteApplied = true;
+    }
+
+    return { display, netReceive, totalGhar, totalPays, totalReceives, balanced: totalPays===totalReceives, noteApplied };
+  }
+
+  function renderCalculation(){
+    const res = compute();
+    players.forEach(p=>{
+      const cell = document.getElementById('res-'+p.id);
+      if (!cell) return;
+      const d = res.display[p.id];
+      if (d.side === 'pay') cell.innerHTML = '<span class="result-pay">Pay ' + d.amount + '</span>';
+      else if (d.side === 'receive') cell.innerHTML = '<span class="result-rec">Receive ' + d.amount + '</span>';
+      else cell.textContent = '0';
+    });
+    totalGharEl.textContent = res.totalGhar;
+    totalPaysEl.textContent = res.totalPays;
+    totalReceivesEl.textContent = res.totalReceives;
+    isBalancedEl.textContent = res.balanced ? 'Yes' : 'No';
+    adjustNote.style.display = res.noteApplied ? 'block' : 'none';
+    liveSummary.style.display = 'flex';
+    return res;
+  }
+
+  function saveRound(){
+    const res = renderCalculation();
+    const round = {
+      id: history.length + 1,
+      ts: Date.now(),
+      players: players.map((p,i)=>({ id: p.id, name: p.name, ghar: toInt(p.ghar), points: toInt(p.points), netReceive: res.netReceive[i] })),
+      noteApplied: res.noteApplied
+    };
+    history.push(round);
+    saveHistory(); renderHistory();
+    alert('Round saved ✔️');
+  }
+
+  function renderHistory(){
+    if (!history || history.length===0){
+      roundsList.innerHTML = '<div class="muted">No rounds saved yet.</div>';
+      scoreboardEl.innerHTML = '<div class="muted">No data</div>';
+      return;
+    }
+    let html = '';
+    for (let idx = history.length-1; idx>=0; idx--){
+      const r = history[idx]; const t = new Date(r.ts).toLocaleString();
+      html += '<div class="roundCard"><div style="display:flex;justify-content:space-between"><div><strong>Round '+r.id+'</strong></div><div class="muted">'+t+'</div></div>';
+      r.players.forEach(pl=>{
+        const v = toInt(pl.netReceive); const disp = v>0?('R+'+v):v<0?('P'+Math.abs(v)):'0';
+        html += '<div style="display:flex;justify-content:space-between;padding:6px 0"><div style="color:#334155">'+escapeHtml(pl.name)+'</div><div style="font-weight:700;color:'+(v>0? 'var(--ok)': v<0? 'var(--bad)': '#334155')+'">'+disp+'</div></div>';
+      });
+      html += '</div>';
+    }
+    roundsList.innerHTML = html; renderScoreboard();
+  }
+
+  function renderScoreboard(){
+    if (!history || history.length===0){ scoreboardEl.innerHTML = '<div class="muted">No data</div>'; return; }
+    const totals = players.map((p, idx)=> history.reduce((s,r)=> s + (r.players[idx] ? toInt(r.players[idx].netReceive) : 0), 0));
+    let html = '';
+    players.forEach((p,i)=>{ html += '<div style="display:flex;justify-content:space-between;padding:6px 0"><div style="color:#334155">'+escapeHtml(p.name)+'</div><div style="font-weight:800;color:'+(totals[i]>0? 'var(--ok)': totals[i]<0? 'var(--bad)': '#334155')+'">'+totals[i]+'</div></div>'; });
+    scoreboardEl.innerHTML = html;
+  }
+
+  function exportExcel(){
+    if (typeof XLSX === 'undefined'){ alert('Export library missing'); return; }
+    if (!history || history.length===0){ alert('No rounds to export'); return; }
+    const rows = [];
+    history.forEach(r => r.players.forEach(pl=> rows.push({ Round: r.id, Time: new Date(r.ts).toLocaleString(), Player: pl.name, GHAR: pl.ghar, Points: pl.points, NetReceived: pl.netReceive })));
+    const totals = players.map((p, idx)=> ({ Player: p.name, TotalNetReceived: history.reduce((s,r)=> s + (r.players[idx] ? toInt(r.players[idx].netReceive) : 0), 0) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Rounds');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totals), 'Scoreboard');
+    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'binary'});
+    function s2ab(s){ const buf = new ArrayBuffer(s.length); const view=new Uint8Array(buf); for(let i=0;i<s.length;i++) view[i]=s.charCodeAt(i)&0xFF; return buf; }
+    const blob = new Blob([s2ab(wbout)], {type:'application/octet-stream'});
+    const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='sarara_results.xlsx'; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },800);
+  }
+
+  function newRound(){
+    if (!confirm('Clear GHAR & Points for a new round?')) return;
+    players = players.map(p=>({ id:p.id, name:p.name, ghar:0, points:0, show:p.show }));
+    savePlayers(); renderPlayers();
+    players.forEach(p=>{ const el=document.getElementById('res-'+p.id); if(el) el.textContent='-'; });
+    liveSummary.style.display = 'none'; adjustNote.style.display = 'none';
+  }
+
+  function addPlayer(){
+    if (players.length >= MAX_PLAYERS){ alert('Max players: '+MAX_PLAYERS); return; }
+    const idx = players.length;
+    const name = DEFAULT_NAMES[idx] || ('Player' + (idx+1));
+    players.push({ id: uuid(), name, ghar:0, points:0, show:false });
+    savePlayers(); renderPlayers(); renderHistory();
+  }
+
+  function delPlayer(){
+    if (players.length <= MIN_PLAYERS) return;
+    const showIdx = players.findIndex(p=>p.show);
+    players.pop();
+    if (showIdx >= players.length) players.forEach((p,i)=>p.show = (i===0));
+    savePlayers(); renderPlayers(); renderHistory();
+  }
+
+  function clearHistory(){ if(!confirm('Clear all rounds?')) return; history=[]; saveHistory(); renderHistory(); alert('History cleared'); }
+  function clearAll(){ if(!confirm('Clear ALL data (players + history)?')) return; history=[]; players = DEFAULT_NAMES.map((n,i)=>({ id: uuid(), name:n, ghar:0, points:0, show:i===0 })); saveHistory(); savePlayers(); renderPlayers(); renderHistory(); alert('All cleared'); }
+
+  function saveHistory(){ try{ localStorage.setItem(STORE_HISTORY, JSON.stringify(history)); }catch(e){} }
+  function savePlayers(){ try{ localStorage.setItem(STORE_PLAYERS, JSON.stringify(players)); }catch(e){} }
+
+  // Autosave safety net
+  setInterval(()=>{ savePlayers(); saveHistory(); }, 5000);
+
+  // Wire events
+  addBtn.addEventListener('click', addPlayer);
+  delBtn.addEventListener('click', delPlayer);
+  clearAllBtn.addEventListener('click', clearAll);
+  calcBtn.addEventListener('click', renderCalculation);
+  saveRoundBtn.addEventListener('click', saveRound);
+  newRoundBtn.addEventListener('click', newRound);
+  exportBtn.addEventListener('click', exportExcel);
+  clearHistoryBtn.addEventListener('click', clearHistory);
+
+  // Initial render
+  renderPlayers();
+  renderCalculation();
+  renderHistory();
+
+  // Expose for debugging
+  window.SARARA = { players, history, renderPlayers, renderCalculation };
+
+})();
+</script>
+</body>
+</html>
