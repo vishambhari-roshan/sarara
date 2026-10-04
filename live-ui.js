@@ -37,9 +37,9 @@ function renderPending(){if(!state||!host())return;
  $('requests').innerHTML=Object.entries(requests).map(([u,r])=>`<p>${esc(members[u]?.name||'Player')} requests: ${esc(labels[r.status])} <button class="secondary" data-accept="${esc(u)}">Apply</button></p>`).join('');
 }
 function selectedRounds(){return Object.values(state?.history||{}).filter(r=>$('view').value==='all'||r.date===$('reportDate').value).sort((a,b)=>a.ts-b.ts);}
-const headers=['Player','Played','Wins','Losses','Draws','Won','Lost','Net'];
-function reportRows(){return C.totals(selectedRounds(),Object.values(state.players)).map(t=>[t.name,t.played,t.wins,t.losses,t.draws,t.won,t.lost,t.net]);}
-function table(rows,cols){return '<div class="tablewrap"><table><thead><tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+esc(c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';}
+const headers=['Player','Net ±','Shows','Played','Wins','Losses'];
+function reportRows(){return C.totals(selectedRounds(),Object.values(state.players)).map(t=>[t.name,t.net,t.unknownShows?t.shows+'*':t.shows,t.played,t.wins,t.losses]);}
+function table(rows,cols){return '<div class="tablewrap"><table><thead><tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map((c,i)=>'<td class="'+(cols[i]==='Net ±'?(c>0?'positive':c<0?'negative':''):'')+'">'+esc(cols[i]==='Net ±'&&c>0?'+'+c:c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';}
 function renderReports(){if(!state)return;const rounds=selectedRounds();$('report').innerHTML=rounds.length?table(reportRows(),headers):'<p>No saved rounds for this selection.</p>';
  $('history').innerHTML=[...rounds].reverse().map(r=>`<details><summary>${esc(r.date)} · ${esc(new Date(r.ts).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata'}))} · ${r.players.length} players</summary>${table(r.players.map(p=>[p.name,p.ghar,p.points,p.netReceive]),['Player','GHAR','Points','Net'])}${host()?`<div class="actions"><button class="secondary" data-reopen="${esc(r.id)}">Reopen / correct</button><button class="danger" data-delete="${esc(r.id)}">Delete round</button></div>`:''}</details>`).join('');
  $('trash').innerHTML=Object.values(state.trash).map(r=>`<p>${esc(r.date)} · ${r.players.length} players ${host()?`<button data-restore="${esc(r.id)}" class="secondary">Restore</button>`:''}</p>`).join('')||'<p>None.</p>';

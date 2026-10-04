@@ -20,15 +20,17 @@
   function totals(rounds, roster=[]){
     const map=new Map();
     for(const r of rounds) for(const p of r.players){
-      if(!map.has(p.id))map.set(p.id,{id:p.id,name:p.name,played:0,wins:0,losses:0,draws:0,won:0,lost:0,net:0});
-      const t=map.get(p.id),v=int(p.netReceive);t.name=p.name;t.played++;t.net+=v;
+      if(!map.has(p.id))map.set(p.id,{id:p.id,name:p.name,shows:0,unknownShows:0,played:0,wins:0,losses:0,draws:0,won:0,lost:0,net:0});
+      const t=map.get(p.id),v=int(p.netReceive);
+      const showId=r.show || r.players.find(x=>x.show===true)?.id;
+      if(showId===p.id)t.shows++;if(!showId)t.unknownShows++;t.name=p.name;t.played++;t.net+=v;
       if(v>0){t.wins++;t.won+=v;}else if(v<0){t.losses++;t.lost-=v;}else t.draws++;
     }
     return [...map.values()].map(t=>({...t,name:roster.find(p=>p.id===t.id)?.name||t.name}));
   }
   function saveRound(state, result, id, now){
     if(state.history.some(r=>r.id===id))throw Error('This round is already saved. Start a new round or reopen it.');
-    state.history.push({id,date:state.draft.date,ts:now,players:result.players.map(p=>({...p}))});
+    state.history.push({id,show:result.players.find(p=>p.show)?.id||'',date:state.draft.date,ts:now,players:result.players.map(p=>({...p}))});
     state.draft.saved=true;state.draft.revealed=true;
   }
   const api={int,day,compute,totals,saveRound};
